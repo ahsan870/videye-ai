@@ -1,4 +1,3 @@
-
 import streamlit as st
 import cv2
 import numpy as np
@@ -34,11 +33,12 @@ def get_center(bbox):
     return ((x1 + x2) / 2, (y1 + y2) / 2)
 
 # Determine the car movement direction at the intersection
+# Determine the car movement direction at the intersection
 def calculate_movement_direction(previous_center, current_center, camera_position):
     dx = current_center[0] - previous_center[0]
     dy = current_center[1] - previous_center[1]
     
-    if camera_position == "north":  # Example: Camera facing south
+    if camera_position == "north":  # Camera facing south
         if dy > 0:
             return "STRAIGHT (southbound)"
         elif dx > 0:
@@ -46,8 +46,8 @@ def calculate_movement_direction(previous_center, current_center, camera_positio
         elif dx < 0:
             return "LEFT (eastbound)"
         else:
-            return "UNKNOWN"
-    elif camera_position == "south":  # Example: Camera facing north
+            return "TOWARD CAMERA"
+    elif camera_position == "south":  # Camera facing north
         if dy < 0:
             return "STRAIGHT (northbound)"
         elif dx > 0:
@@ -55,8 +55,8 @@ def calculate_movement_direction(previous_center, current_center, camera_positio
         elif dx < 0:
             return "RIGHT (eastbound)"
         else:
-            return "UNKNOWN"
-    elif camera_position == "east":  # Example: Camera facing west
+            return "TOWARD CAMERA"
+    elif camera_position == "east":  # Camera facing west
         if dx < 0:
             return "STRAIGHT (westbound)"
         elif dy > 0:
@@ -64,8 +64,8 @@ def calculate_movement_direction(previous_center, current_center, camera_positio
         elif dy < 0:
             return "RIGHT (northbound)"
         else:
-            return "UNKNOWN"
-    elif camera_position == "west":  # Example: Camera facing east
+            return "TOWARD CAMERA"
+    elif camera_position == "west":  # Camera facing east
         if dx > 0:
             return "STRAIGHT (eastbound)"
         elif dy > 0:
@@ -73,9 +73,10 @@ def calculate_movement_direction(previous_center, current_center, camera_positio
         elif dy < 0:
             return "LEFT (northbound)"
         else:
-            return "UNKNOWN"
+            return "TOWARD CAMERA"
     else:
         return "UNKNOWN"
+
 
 # Track cars across frames and classify movements
 def track_cars(detections, previous_tracks, frame_id, camera_position, max_distance=50):
@@ -202,61 +203,103 @@ def main():
             tfile = tempfile.NamedTemporaryFile(delete=False)
             tfile.write(uploaded_file.read())
 
+            # Store processing state in session state
+            if 'processing_complete' not in st.session_state:
+                st.session_state.processing_complete = False
+
             if st.button("Process Video"):
                 with st.spinner("Processing video..."):
                     movements = process_video(tfile.name, camera_position)
-
-                    # Convert to DataFrame
                     df_movements = pd.DataFrame(movements)
+                    st.session_state.processing_complete = True
+                    st.session_state.df_movements = df_movements  # Store results in session state
 
-                    # Display results
-                    st.success("Video processing completed!")
+            # Show analysis only after processing is complete
+            if st.session_state.get('processing_complete', False):
+                df_movements = st.session_state.df_movements
+                
+                # Display results
+                st.success("Video processing completed!")
 
-                    st.subheader("📊 Summary")
-                    metrics_col1, metrics_col2, metrics_col3 = st.columns(3)
+                # Total Cars - Separate and prominent
+                st.metric("🚗 Total Vehicles Detected", len(df_movements))
+                
+                st.subheader("📊 Movement Analysis")
+                
+                # First row of metrics
+                col1, col2, col3, col4 = st.columns(4)
+                
+                with col1:
+                    straight_count = len(df_movements[df_movements['movement'].str.contains('STRAIGHT')])
+                    st.metric("⬆️ Straight", straight_count)
+                with col2:
+                    left_turns = len(df_movements[df_movements['movement'].str.contains('LEFT')])
+                    st.metric("↪️ Left", left_turns)
+                with col3:
+                    right_turns = len(df_movements[df_movements['movement'].str.contains('RIGHT')])
+                    st.metric("↩️ Right", right_turns)
+                with col4:
+                    toward_count = len(df_movements[df_movements['movement'].str.contains('TOWARD')])
+                    st.metric("🎯 Toward", toward_count)
 
-                    with metrics_col1:
-                        st.metric("Total Cars", len(df_movements))
-                    with metrics_col2:
-                        st.metric("Left Turns", len(df_movements[df_movements['movement'].str.contains('LEFT')]))
-                    with metrics_col3:
-                        st.metric("Right Turns", len(df_movements[df_movements['movement'].str.contains('RIGHT')]))
+                # Second row - Direction Analysis
+                st.subheader("🔄 Direction Analysis")
+                dir_col1, dir_col2, dir_col3, dir_col4 = st.columns(4)
+                
+                with dir_col1:
+                    northbound = len(df_movements[df_movements['movement'].str.contains('northbound')])
+                    st.metric("⬆️ North", northbound)
+                with dir_col2:
+                    southbound = len(df_movements[df_movements['movement'].str.contains('southbound')])
+                    st.metric("⬇️ South", southbound)
+                with dir_col3:
+                    eastbound = len(df_movements[df_movements['movement'].str.contains('eastbound')])
+                    st.metric("➡️ East", eastbound)
+                with dir_col4:
+                    westbound = len(df_movements[df_movements['movement'].str.contains('westbound')])
+                    st.metric("⬅️ West", westbound)
 
-                    # Display movement breakdown
-                    st.subheader("🔄 Movement Breakdown")
-                    movement_counts = df_movements['movement'].value_counts()
-                    st.bar_chart(movement_counts)
+                # Display movement breakdown chart
+                st.subheader("📊 Movement Distribution")
+                movement_counts = df_movements['movement'].value_counts()
+                st.bar_chart(movement_counts)
 
-                    # Display detailed results
-                    st.subheader("📋 Detailed Results")
-                    st.dataframe(df_movements, use_container_width=True)
+                # Display detailed results
+                st.subheader("📋 Detailed Results")
+                st.dataframe(df_movements, use_container_width=True)
 
-                    # Export option
-                    csv = df_movements.to_csv(index=False)
-                    st.download_button(
-                        label="📥 Download results as CSV",
-                        data=csv,
-                        file_name="car_movements.csv",
-                        mime="text/csv"
-                    )
+                # Export option
+                csv = df_movements.to_csv(index=False)
+                st.download_button(
+                    label="📥 Download results as CSV",
+                    data=csv,
+                    file_name="car_movements.csv",
+                    mime="text/csv"
+                )
 
             # Clean up temporary file
             Path(tfile.name).unlink()
 
+    # Show instructions and features only when not processing or showing results
     with col2:
-        st.markdown('''
-        ### 📝 Instructions
-        1. Upload a video file (MP4 or AVI format)
-        2. Select the camera position (north, south, east, or west)
-        3. Click 'Process Video' button
-        4. View results and download the report
+        if not st.session_state.get('processing_complete', False):
+            st.markdown('''
+            ### 📝 Instructions
+            1. Upload a video file (MP4 or AVI format)
+            2. Select the camera position (north, south, east, or west)
+            3. Click 'Process Video' button
+            4. View results and download the report
 
-        ### 🎯 Features
-        - Car detection using YOLOv8
-        - Movement tracking (left, right, straight, toward/away from the camera)
-        - Detailed statistics
-        - Downloadable reports
-        ''')
+            ### 🎯 Features
+            - Car detection using YOLOv8
+            - Movement tracking (left, right, straight, toward/away from the camera)
+            - Detailed statistics
+            - Downloadable reports
+            ''')
 
 if __name__ == "__main__":
+    # Initialize session state
+    if 'processing_complete' not in st.session_state:
+        st.session_state.processing_complete = False
+    
     main()
