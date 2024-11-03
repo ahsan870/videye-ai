@@ -13,7 +13,6 @@ import base64
 
 # Set environment variable to handle MPS fallback
 os.environ['PYTORCH_ENABLE_MPS_FALLBACK'] = '1'
-
 # Set page configuration
 st.set_page_config(
     page_title="Car Detection System",
@@ -620,3 +619,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

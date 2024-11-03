@@ -5,9 +5,20 @@ __pycache__/
 *.so
 .Python
 *.dylib
+*.pyd
+*.dll
+*.lib
+
+# Specific large files to exclude
+**/libtorch_cpu.dylib
+**/libopenblas64_.0.dylib
+**/libarrow.1800.dylib
+**/libopenblas.0.dylib
+**/cv2.abi3.so
 
 # Virtual Environment
 venv/
+vidEye/venv/
 ENV/
 .env
 .venv
