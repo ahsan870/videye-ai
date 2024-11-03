@@ -33,53 +33,110 @@ def get_center(bbox):
     return ((x1 + x2) / 2, (y1 + y2) / 2)
 
 # Determine the car movement direction at the intersection
-# Determine the car movement direction at the intersection
-def calculate_movement_direction(previous_center, current_center, camera_position):
+def calculate_movement_direction(previous_center, current_center, camera_position, road_type='4-way intersection'):
     dx = current_center[0] - previous_center[0]
     dy = current_center[1] - previous_center[1]
     
-    if camera_position == "north":  # Camera facing south
-        if dy > 0:
-            return "STRAIGHT (southbound)"
-        elif dx > 0:
-            return "RIGHT (westbound)"
-        elif dx < 0:
-            return "LEFT (eastbound)"
-        else:
-            return "TOWARD CAMERA"
-    elif camera_position == "south":  # Camera facing north
-        if dy < 0:
-            return "STRAIGHT (northbound)"
-        elif dx > 0:
-            return "LEFT (westbound)"
-        elif dx < 0:
-            return "RIGHT (eastbound)"
-        else:
-            return "TOWARD CAMERA"
-    elif camera_position == "east":  # Camera facing west
-        if dx < 0:
-            return "STRAIGHT (westbound)"
-        elif dy > 0:
-            return "LEFT (southbound)"
-        elif dy < 0:
-            return "RIGHT (northbound)"
-        else:
-            return "TOWARD CAMERA"
-    elif camera_position == "west":  # Camera facing east
-        if dx > 0:
-            return "STRAIGHT (eastbound)"
-        elif dy > 0:
-            return "RIGHT (southbound)"
-        elif dy < 0:
-            return "LEFT (northbound)"
-        else:
-            return "TOWARD CAMERA"
-    else:
+    if road_type == '2-way road':
+        # Simplified logic for 2-way roads
+        if camera_position == "north":  # Camera facing south
+            if dy > 0:
+                return "STRAIGHT (southbound)"
+            elif dy < 0:
+                return "STRAIGHT (northbound)"
+            else:
+                return "STATIONARY"
+        elif camera_position == "south":  # Camera facing north
+            if dy < 0:
+                return "STRAIGHT (northbound)"
+            elif dy > 0:
+                return "STRAIGHT (southbound)"
+            else:
+                return "STATIONARY"
+    
+    elif road_type == 'T-junction':
+        # Modified logic for T-junctions
+        if camera_position == "north":  # Camera facing south
+            if dy > 0:
+                return "STRAIGHT (southbound)"
+            elif dx > 0:
+                return "RIGHT (westbound)"
+            elif dx < 0:
+                return "LEFT (eastbound)"
+            else:
+                return "STATIONARY"
+        elif camera_position == "south":  # Camera facing north
+            if dy < 0:
+                return "STRAIGHT (northbound)"
+            elif dx > 0:
+                return "RIGHT (eastbound)"
+            elif dx < 0:
+                return "LEFT (westbound)"
+            else:
+                return "STATIONARY"
+        elif camera_position == "east":  # Camera facing west
+            if dx < 0:
+                return "STRAIGHT (westbound)"
+            elif dy > 0:
+                return "RIGHT (southbound)"
+            elif dy < 0:
+                return "LEFT (northbound)"
+            else:
+                return "STATIONARY"
+    
+    else:  # 4-way intersection
+        if camera_position == "north":
+            if abs(dy) > abs(dx):
+                if dy > 0:
+                    return "STRAIGHT (southbound)"
+                else:
+                    return "STRAIGHT (northbound)"
+            else:
+                if dx > 0:
+                    return "RIGHT (westbound)"
+                else:
+                    return "LEFT (eastbound)"
+        elif camera_position == "south":
+            if abs(dy) > abs(dx):
+                if dy < 0:
+                    return "STRAIGHT (northbound)"
+                else:
+                    return "STRAIGHT (southbound)"
+            else:
+                if dx > 0:
+                    return "RIGHT (eastbound)"
+                else:
+                    return "LEFT (westbound)"
+        elif camera_position == "east":
+            if abs(dx) > abs(dy):
+                if dx < 0:
+                    return "STRAIGHT (westbound)"
+                else:
+                    return "STRAIGHT (eastbound)"
+            else:
+                if dy > 0:
+                    return "RIGHT (southbound)"
+                else:
+                    return "LEFT (northbound)"
+        elif camera_position == "west":
+            if abs(dx) > abs(dy):
+                if dx > 0:
+                    return "STRAIGHT (eastbound)"
+                else:
+                    return "STRAIGHT (westbound)"
+            else:
+                if dy > 0:
+                    return "RIGHT (northbound)"
+                else:
+                    return "LEFT (southbound)"
+        
         return "UNKNOWN"
 
+    return "UNKNOWN"
 
 # Track cars across frames and classify movements
-def track_cars(detections, previous_tracks, frame_id, camera_position, max_distance=50):
+def track_cars(detections, previous_tracks, frame_id, camera_position, road_type):
+    max_distance = 50
     current_tracks = {}
     used_previous = set()
 
@@ -124,7 +181,16 @@ def track_cars(detections, previous_tracks, frame_id, camera_position, max_dista
 
     return current_tracks
 
-def process_video(video_path, camera_position):
+def process_video(video_path, camera_position, road_type):
+    # Add validation
+    if road_type == '2-way road' and camera_position not in ['north', 'south']:
+        st.error("Invalid camera position for 2-way road")
+        return None
+    
+    if road_type == 'T-junction' and camera_position == 'west':
+        st.error("Invalid camera position for T-junction")
+        return None
+    
     model = load_model()
     cap = cv2.VideoCapture(video_path)
 
@@ -160,7 +226,7 @@ def process_video(video_path, camera_position):
                 detections.append([x1, y1, x2, y2])
 
         # Track cars and record movements
-        tracks = track_cars(detections, tracks, frame_count, camera_position)
+        tracks = track_cars(detections, tracks, frame_count, camera_position, road_type)
 
         for track_id, track_info in tracks.items():
             car_movements[track_id].append({
@@ -197,7 +263,16 @@ def main():
         uploaded_file = st.file_uploader("Upload a video file", type=['mp4', 'avi'])
         st.markdown("</div>", unsafe_allow_html=True)
 
-        camera_position = st.selectbox("Select Camera Position", ['north', 'south', 'east', 'west'])
+        # Update camera position selection with road type
+        road_type = st.selectbox("Select Road Type", ['4-way intersection', '2-way road', 'T-junction'])
+        
+        # Show appropriate camera positions based on road type
+        if road_type == '2-way road':
+            camera_position = st.selectbox("Select Camera Position", ['north', 'south'])
+        elif road_type == 'T-junction':
+            camera_position = st.selectbox("Select Camera Position", ['north', 'south', 'east'])
+        else:  # 4-way intersection
+            camera_position = st.selectbox("Select Camera Position", ['north', 'south', 'east', 'west'])
 
         if uploaded_file is not None:
             tfile = tempfile.NamedTemporaryFile(delete=False)
@@ -209,7 +284,7 @@ def main():
 
             if st.button("Process Video"):
                 with st.spinner("Processing video..."):
-                    movements = process_video(tfile.name, camera_position)
+                    movements = process_video(tfile.name, camera_position, road_type)
                     df_movements = pd.DataFrame(movements)
                     st.session_state.processing_complete = True
                     st.session_state.df_movements = df_movements  # Store results in session state
@@ -221,43 +296,105 @@ def main():
                 # Display results
                 st.success("Video processing completed!")
 
-                # Total Cars - Separate and prominent
+                # Total Cars - Always show
                 st.metric("🚗 Total Vehicles Detected", len(df_movements))
                 
-                st.subheader("📊 Movement Analysis")
+                if road_type == '2-way road':
+                    # Movement Analysis for 2-way road
+                    st.subheader("📊 Movement Analysis")
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        northbound = len(df_movements[df_movements['movement'].str.contains('northbound')])
+                        st.metric("⬆️ Northbound", northbound)
+                    with col2:
+                        southbound = len(df_movements[df_movements['movement'].str.contains('southbound')])
+                        st.metric("⬇️ Southbound", southbound)
+                        
+                    # Percentage Analysis
+                    total = northbound + southbound
+                    if total > 0:
+                        st.subheader("🔄 Direction Distribution")
+                        dir_col1, dir_col2 = st.columns(2)
+                        with dir_col1:
+                            st.metric("⬆️ Northbound %", f"{(northbound/total)*100:.1f}%")
+                        with dir_col2:
+                            st.metric("⬇️ Southbound %", f"{(southbound/total)*100:.1f}%")
                 
-                # First row of metrics
-                col1, col2, col3, col4 = st.columns(4)
+                elif road_type == 'T-junction':
+                    # Movement Analysis for T-junction
+                    st.subheader("📊 Movement Analysis")
+                    col1, col2, col3 = st.columns(3)
+                    
+                    with col1:
+                        straight = len(df_movements[df_movements['movement'].str.contains('STRAIGHT')])
+                        st.metric("⬆️ Straight", straight)
+                    with col2:
+                        left = len(df_movements[df_movements['movement'].str.contains('LEFT')])
+                        st.metric("↩️ Left Turn", left)
+                    with col3:
+                        right = len(df_movements[df_movements['movement'].str.contains('RIGHT')])
+                        st.metric("↪️ Right Turn", right)
+                        
+                    # Direction Analysis for T-junction
+                    st.subheader("🔄 Direction Analysis")
+                    dir_col1, dir_col2, dir_col3 = st.columns(3)
+                    
+                    if camera_position == "north":
+                        with dir_col1:
+                            southbound = len(df_movements[df_movements['movement'].str.contains('southbound')])
+                            st.metric("⬇️ Southbound", southbound)
+                        with dir_col2:
+                            eastbound = len(df_movements[df_movements['movement'].str.contains('eastbound')])
+                            st.metric("➡️ Eastbound", eastbound)
+                        with dir_col3:
+                            westbound = len(df_movements[df_movements['movement'].str.contains('westbound')])
+                            st.metric("⬅️ Westbound", westbound)
+                    elif camera_position == "south":
+                        with dir_col1:
+                            northbound = len(df_movements[df_movements['movement'].str.contains('northbound')])
+                            st.metric("⬆️ Northbound", northbound)
+                        with dir_col2:
+                            eastbound = len(df_movements[df_movements['movement'].str.contains('eastbound')])
+                            st.metric("➡️ Eastbound", eastbound)
+                        with dir_col3:
+                            westbound = len(df_movements[df_movements['movement'].str.contains('westbound')])
+                            st.metric("⬅️ Westbound", westbound)
                 
-                with col1:
-                    straight_count = len(df_movements[df_movements['movement'].str.contains('STRAIGHT')])
-                    st.metric("⬆️ Straight", straight_count)
-                with col2:
-                    left_turns = len(df_movements[df_movements['movement'].str.contains('LEFT')])
-                    st.metric("↪️ Left", left_turns)
-                with col3:
-                    right_turns = len(df_movements[df_movements['movement'].str.contains('RIGHT')])
-                    st.metric("↩️ Right", right_turns)
-                with col4:
-                    toward_count = len(df_movements[df_movements['movement'].str.contains('TOWARD')])
-                    st.metric("🎯 Toward", toward_count)
+                else:  # 4-way intersection
+                    # Movement Analysis
+                    st.subheader("📊 Movement Analysis")
+                    col1, col2, col3, col4 = st.columns(4)
+                    
+                    with col1:
+                        straight = len(df_movements[df_movements['movement'].str.contains('STRAIGHT')])
+                        st.metric("⬆️ Straight", straight)
+                    with col2:
+                        left = len(df_movements[df_movements['movement'].str.contains('LEFT')])
+                        st.metric("↩️ Left", left)
+                    with col3:
+                        right = len(df_movements[df_movements['movement'].str.contains('RIGHT')])
+                        st.metric("↪️ Right", right)
+                    with col4:
+                        stationary = len(df_movements[df_movements['movement'].str.contains('STATIONARY')])
+                        st.metric("🚫 Stationary", stationary)
 
-                # Second row - Direction Analysis
-                st.subheader("🔄 Direction Analysis")
-                dir_col1, dir_col2, dir_col3, dir_col4 = st.columns(4)
-                
-                with dir_col1:
-                    northbound = len(df_movements[df_movements['movement'].str.contains('northbound')])
-                    st.metric("⬆️ North", northbound)
-                with dir_col2:
-                    southbound = len(df_movements[df_movements['movement'].str.contains('southbound')])
-                    st.metric("⬇️ South", southbound)
-                with dir_col3:
-                    eastbound = len(df_movements[df_movements['movement'].str.contains('eastbound')])
-                    st.metric("➡️ East", eastbound)
-                with dir_col4:
-                    westbound = len(df_movements[df_movements['movement'].str.contains('westbound')])
-                    st.metric("⬅️ West", westbound)
+                    # Direction Analysis
+                    st.subheader("🔄 Direction Analysis")
+                    dir_col1, dir_col2, dir_col3, dir_col4 = st.columns(4)
+                    
+                    with dir_col1:
+                        northbound = len(df_movements[df_movements['movement'].str.contains('northbound')])
+                        st.metric("⬆️ Northbound", northbound)
+                    with dir_col2:
+                        southbound = len(df_movements[df_movements['movement'].str.contains('southbound')])
+                        st.metric("⬇️ Southbound", southbound)
+                    with dir_col3:
+                        eastbound = len(df_movements[df_movements['movement'].str.contains('eastbound')])
+                        st.metric("➡️ Eastbound", eastbound)
+                    with dir_col4:
+                        westbound = len(df_movements[df_movements['movement'].str.contains('westbound')])
+                        st.metric("⬅️ Westbound", westbound)
 
                 # Display movement breakdown chart
                 st.subheader("📊 Movement Distribution")
