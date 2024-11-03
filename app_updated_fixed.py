@@ -9,6 +9,7 @@ import time
 from collections import defaultdict
 import torch
 import os
+import base64
 
 # Set environment variable to handle MPS fallback
 os.environ['PYTORCH_ENABLE_MPS_FALLBACK'] = '1'
@@ -253,8 +254,216 @@ def process_video(video_path, camera_position, road_type):
 
     return final_movements
 
+# Add this to your CSS
+st.markdown("""
+<style>
+    /* ... (previous CSS) ... */
+
+    /* Instructions Modal */
+    .instructions-modal {
+        position: fixed;
+        right: 20px;
+        top: 80px;
+        background: white;
+        padding: 1.5rem;
+        border-radius: 1rem;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        z-index: 1000;
+        max-width: 350px;
+        transition: all 0.3s ease;
+    }
+
+    .instructions-modal h3 {
+        color: var(--primary);
+        margin-bottom: 1rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .instructions-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+
+    .instructions-list li {
+        margin-bottom: 0.75rem;
+        padding-left: 1.5rem;
+        position: relative;
+    }
+
+    .instructions-list li:before {
+        content: '→';
+        position: absolute;
+        left: 0;
+        color: var(--primary);
+    }
+
+    /* Help Button */
+    .help-button {
+        position: fixed;
+        right: 20px;
+        top: 20px;
+        background: var(--primary);
+        color: white;
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        box-shadow: var(--shadow);
+        z-index: 1001;
+        transition: all 0.3s ease;
+    }
+
+    .help-button:hover {
+        background: var(--secondary);
+        transform: scale(1.05);
+    }
+
+    /* Navigation styles */
+    .nav-container {
+        background: white;
+        padding: 1rem 2rem;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 2rem;
+    }
+
+    .nav-logo {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        text-decoration: none;
+    }
+
+    .nav-logo img {
+        height: 40px;
+        width: auto;
+    }
+
+    .nav-logo span {
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: var(--primary);
+    }
+
+    .nav-links {
+        display: flex;
+        gap: 2rem;
+    }
+
+    .nav-link {
+        color: var(--text-dark);
+        text-decoration: none;
+        padding: 0.5rem 1rem;
+        border-radius: 0.375rem;
+        transition: all 0.2s ease;
+    }
+
+    .nav-link:hover {
+        background: var(--background);
+        color: var(--primary);
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# Add this to your session state initialization
+if 'show_instructions' not in st.session_state:
+    st.session_state.show_instructions = False
+
+# Add this function to handle the toggle
+def toggle_instructions():
+    st.session_state.show_instructions = not st.session_state.show_instructions
+
+# Add this to your main() function, right after add_nav():
+def show_help_button():
+    # Help button
+    st.markdown("""
+        <div class="help-button" onclick="document.getElementById('instructions').style.display = 
+            document.getElementById('instructions').style.display === 'none' ? 'block' : 'none';">
+            <span style="font-size: 1.2rem;">?</span>
+        </div>
+    """, unsafe_allow_html=True)
+
+    # Instructions modal
+    display = "block" if st.session_state.show_instructions else "none"
+    st.markdown(f"""
+        <div id="instructions" class="instructions-modal" style="display: {display};">
+            <h3>📝 Instructions</h3>
+            <ul class="instructions-list">
+                <li>Upload a video file (MP4 or AVI format)</li>
+                <li>Select the road type from the dropdown</li>
+                <li>Choose the camera position</li>
+                <li>Click 'Process Video' button</li>
+                <li>View analysis results and download report</li>
+            </ul>
+        </div>
+    """, unsafe_allow_html=True)
+
+# Function to load and encode the logo
+def get_base64_of_bin_file(bin_file):
+    try:
+        with open(bin_file, 'rb') as f:
+            data = f.read()
+        return base64.b64encode(data).decode()
+    except Exception as e:
+        return ""
+
+# Navigation function
+def add_nav():
+    try:
+        # Try to load logo
+        logo_path = "logo1.png"  # Make sure this path is correct
+        logo_base64 = get_base64_of_bin_file(logo_path)
+        logo_html = f'<img src="data:image/png;base64,{logo_base64}" class="logo-image" alt="VidEye AI"/>'
+    except:
+        # Fallback to text if logo fails to load
+        logo_html = '🚦'
+
+    st.markdown(f"""
+        <div class="nav-container">
+            <div class="nav-logo">
+                {logo_html}
+                <span>VidEye AI</span>
+            </div>
+            <div class="nav-links">
+                <a href="/" class="nav-link">Home</a>
+                <a href="/about" class="nav-link">About</a>
+                <a href="/contact" class="nav-link">Contact</a>
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
+
 def main():
-    st.markdown("<h1 class='title'>🚦 Traffic Intersection Monitoring</h1>", unsafe_allow_html=True)
+    add_nav()
+    show_help_button()  # Add this line
+    
+    # Main content container
+    st.markdown('<div class="main-container">', unsafe_allow_html=True)
+    
+    # Title section
+    st.markdown("""
+        <div class="title-section">
+            <h1>🚦 Traffic Intersection Monitoring</h1>
+            <p>Advanced AI-powered traffic analysis for smarter urban planning</p>
+        </div>
+    """, unsafe_allow_html=True)
+
+    # Add JavaScript for toggle functionality
+    st.markdown("""
+        <script>
+            const toggleInstructions = () => {
+                const instructions = document.getElementById('instructions');
+                instructions.style.display = instructions.style.display === 'none' ? 'block' : 'none';
+            }
+        </script>
+    """, unsafe_allow_html=True)
 
     col1, col2 = st.columns([2, 1])
 
@@ -416,23 +625,6 @@ def main():
 
             # Clean up temporary file
             Path(tfile.name).unlink()
-
-    # Show instructions and features only when not processing or showing results
-    with col2:
-        if not st.session_state.get('processing_complete', False):
-            st.markdown('''
-            ### 📝 Instructions
-            1. Upload a video file (MP4 or AVI format)
-            2. Select the camera position (north, south, east, or west)
-            3. Click 'Process Video' button
-            4. View results and download the report
-
-            ### 🎯 Features
-            - Car detection using YOLOv8
-            - Movement tracking (left, right, straight, toward/away from the camera)
-            - Detailed statistics
-            - Downloadable reports
-            ''')
 
 if __name__ == "__main__":
     # Initialize session state
